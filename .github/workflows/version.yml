@@ -1,0 +1,53 @@
+name: Compute Version
+
+on:
+  workflow_call:
+    outputs:
+      previousTag:
+        description: "Previous release tag"
+        value: ${{ jobs.version.outputs.previousTag }}
+
+      nextTag:
+        description: "Next release tag"
+        value: ${{ jobs.version.outputs.nextTag }}
+
+jobs:
+  version:
+    name: Compute Version
+    runs-on: ubuntu-latest
+
+    outputs:
+      previousTag: ${{ steps.version.outputs.previousTag }}
+      nextTag: ${{ steps.version.outputs.nextTag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        shell: bash
+        run: |
+          git fetch --tags
+
+          LAST_TAG=$(git tag --list "v*" --sort=-version:refname | head -n 1)
+
+          if [ -z "$LAST_TAG" ]; then
+            LAST_TAG="v0.0.0"
+          fi
+
+          VERSION=${LAST_TAG#v}
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          PATCH=$((PATCH + 1))
+
+          NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+
+          echo "Previous tag: $LAST_TAG"
+          echo "Next tag: $NEXT_TAG"
+
+          echo "previousTag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+          echo "nextTag=$NEXT_TAG" >> "$GITHUB_OUTPUT"

@@ -9,6 +9,16 @@ on:
         type: string
         default: "release-notes.md"
 
+      previousTag:
+        description: "Previous release tag"
+        required: true
+        type: string
+
+      nextTag:
+        description: "Next release tag"
+        required: true
+        type: string
+
 jobs:
   devlog:
     name: Generate Devlog
@@ -20,25 +30,32 @@ jobs:
         with:
           fetch-depth: 0
 
+      # ------------------------------
+      # Devlog
+      # ------------------------------
+
       - name: Generate devlog
         shell: bash
+        env:
+          PREVIOUS_TAG: ${{ inputs.previousTag }}
+          NEXT_TAG: ${{ inputs.nextTag }}
+          OUTPUT: ${{ inputs.outputFile }}
         run: |
-          CURRENT_TAG="${GITHUB_REF_NAME}"
-          OUTPUT="${{ inputs.outputFile }}"
+          git fetch --tags
 
-          PREVIOUS_TAG=$(git describe \
-            --tags \
-            --abbrev=0 \
-            "${CURRENT_TAG}^" \
-            2>/dev/null || echo "")
+          echo "Previous tag: $PREVIOUS_TAG"
+          echo "Next tag: $NEXT_TAG"
 
-          if [ -n "$PREVIOUS_TAG" ]; then
-            RANGE="${PREVIOUS_TAG}..${CURRENT_TAG}"
+          # If no real release exists yet, use all commits.
+          if [ "$PREVIOUS_TAG" = "v0.0.0" ] && ! git rev-parse "$PREVIOUS_TAG" >/dev/null 2>&1; then
+            RANGE="HEAD"
           else
-            RANGE="${CURRENT_TAG}"
+            RANGE="${PREVIOUS_TAG}..HEAD"
           fi
 
-          echo "# ${CURRENT_TAG}" > "$OUTPUT"
+          echo "Commit range: $RANGE"
+
+          echo "# ${NEXT_TAG}" > "$OUTPUT"
           echo "" >> "$OUTPUT"
 
           add_section () {
@@ -47,7 +64,8 @@ jobs:
 
             COMMITS=$(git log "$RANGE" \
               --pretty=format:"%s" \
-              --grep="$PATTERN")
+              --extended-regexp \
+              --grep="$PATTERN" || true)
 
             if [ -n "$COMMITS" ]; then
               echo "## $TITLE" >> "$OUTPUT"
@@ -59,13 +77,17 @@ jobs:
             fi
           }
 
-          add_section "Features" "^feat"
-          add_section "Fixes" "^fix"
-          add_section "Performance" "^perf"
-          add_section "Refactoring" "^refactor"
-          add_section "Documentation" "^docs"
-          add_section "Tests" "^test"
-          add_section "CI / CD" "^ci"
+          add_section "Features" "^feat(\(.+\))?!?:"
+          add_section "Fixes" "^fix(\(.+\))?!?:"
+          add_section "Performance" "^perf(\(.+\))?!?:"
+          add_section "Refactoring" "^refactor(\(.+\))?!?:"
+          add_section "Documentation" "^docs(\(.+\))?!?:"
+          add_section "Tests" "^test(\(.+\))?!?:"
+          add_section "CI / CD" "^ci(\(.+\))?!?:"
+
+      # ------------------------------
+      # Artifact
+      # ------------------------------
 
       - name: Upload devlog
         uses: actions/upload-artifact@v4
