@@ -1,0 +1,94 @@
+name: Create Release
+
+on:
+  workflow_call:
+    inputs:
+      artifactName:
+        description: "Name of the build artifact"
+        required: false
+        type: string
+        default: ""
+
+      releaseName:
+        description: "Custom release name. Defaults to Git tag."
+        required: false
+        type: string
+        default: ""
+
+      prerelease:
+        description: "Mark release as prerelease"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ------------------------------
+      # Devlog
+      # ------------------------------
+
+      - name: Download devlog
+        uses: actions/download-artifact@v4
+        with:
+          name: release-devlog
+          path: release-notes
+
+      # ------------------------------
+      # Build
+      # ------------------------------
+
+      - name: Download build artifact
+        if: inputs.artifactName != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifactName }}
+          path: release-artifacts
+
+      # ------------------------------
+      # Release
+      # ------------------------------
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NAME: ${{ inputs.releaseName }}
+        shell: bash
+        run: |
+          if [ -z "$RELEASE_NAME" ]; then
+            RELEASE_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            PRERELEASE="--prerelease"
+          else
+            PRERELEASE=""
+          fi
+
+          if [ -d "release-artifacts" ] && [ "$(ls -A release-artifacts)" ]; then
+
+            gh release create "$GITHUB_REF_NAME" \
+              release-artifacts/* \
+              --title "$RELEASE_NAME" \
+              --notes-file release-notes/release-notes.md \
+              $PRERELEASE
+
+          else
+
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$RELEASE_NAME" \
+              --notes-file release-notes/release-notes.md \
+              $PRERELEASE
+
+          fi
