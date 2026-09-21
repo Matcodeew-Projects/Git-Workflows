@@ -1,0 +1,75 @@
+name: Generate Devlog
+
+on:
+  workflow_call:
+    inputs:
+      outputFile:
+        description: "Generated devlog file"
+        required: false
+        type: string
+        default: "release-notes.md"
+
+jobs:
+  devlog:
+    name: Generate Devlog
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate devlog
+        shell: bash
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          OUTPUT="${{ inputs.outputFile }}"
+
+          PREVIOUS_TAG=$(git describe \
+            --tags \
+            --abbrev=0 \
+            "${CURRENT_TAG}^" \
+            2>/dev/null || echo "")
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            RANGE="${PREVIOUS_TAG}..${CURRENT_TAG}"
+          else
+            RANGE="${CURRENT_TAG}"
+          fi
+
+          echo "# ${CURRENT_TAG}" > "$OUTPUT"
+          echo "" >> "$OUTPUT"
+
+          add_section () {
+            TITLE="$1"
+            PATTERN="$2"
+
+            COMMITS=$(git log "$RANGE" \
+              --pretty=format:"%s" \
+              --grep="$PATTERN")
+
+            if [ -n "$COMMITS" ]; then
+              echo "## $TITLE" >> "$OUTPUT"
+              echo "" >> "$OUTPUT"
+
+              echo "$COMMITS" | sed 's/^/- /' >> "$OUTPUT"
+
+              echo "" >> "$OUTPUT"
+            fi
+          }
+
+          add_section "Features" "^feat"
+          add_section "Fixes" "^fix"
+          add_section "Performance" "^perf"
+          add_section "Refactoring" "^refactor"
+          add_section "Documentation" "^docs"
+          add_section "Tests" "^test"
+          add_section "CI / CD" "^ci"
+
+      - name: Upload devlog
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-devlog
+          path: ${{ inputs.outputFile }}
+          retention-days: 30
