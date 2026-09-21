@@ -1,0 +1,74 @@
+name: Unity Build
+
+on:
+  workflow_call:
+    inputs:
+      targetPlatform:
+        description: "Unity target platform"
+        required: false
+        type: string
+        default: "StandaloneWindows64"
+
+      buildName:
+        description: "Build name"
+        required: false
+        type: string
+        default: "UnityProject"
+
+      retentionDays:
+        description: "Artifact retention in days"
+        required: false
+        type: number
+        default: 7
+
+    secrets:
+      UNITY_LICENSE:
+        required: true
+      UNITY_EMAIL:
+        required: true
+      UNITY_PASSWORD:
+        required: true
+
+jobs:
+  build:
+    name: Unity Build
+    runs-on: ubuntu-latest
+
+    steps:
+      # Repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      # Unity Library Cache
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ inputs.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ inputs.targetPlatform }}-
+            Library-
+
+      # Unity Build
+      - name: Build Unity project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .
+          targetPlatform: ${{ inputs.targetPlatform }}
+          buildsPath: build
+          buildName: ${{ inputs.buildName }}
+
+      # Artifact
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.targetPlatform }}-Build
+          path: build/${{ inputs.targetPlatform }}
+          retention-days: ${{ inputs.retentionDays }}
