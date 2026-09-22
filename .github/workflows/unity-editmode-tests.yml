@@ -2,6 +2,11 @@ name: Unity EditMode Tests
 
 on:
   workflow_call:
+    inputs:
+      unityVersion:
+        required: false
+        type: string
+        default: 6000.3.11f1
     secrets:
       UNITY_LICENSE:
         required: true
@@ -26,8 +31,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-EditMode-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-EditMode-${{ inputs.unityVersion }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
+            Library-EditMode-${{ inputs.unityVersion }}-
             Library-EditMode-
             Library-
 
@@ -40,6 +46,7 @@ jobs:
         with:
           projectPath: .
           testMode: EditMode
+          unityVersion: ${{ inputs.unityVersion }}
           artifactsPath: test-results/EditMode
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 

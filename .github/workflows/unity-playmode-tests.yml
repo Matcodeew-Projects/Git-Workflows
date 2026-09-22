@@ -1,7 +1,12 @@
-name: Unity PlayMode Tests
+name: Unity EditMode Tests
 
 on:
   workflow_call:
+    inputs:
+      unityVersion:
+        required: false
+        type: string
+        default: 6000.3.11f1
     secrets:
       UNITY_LICENSE:
         required: true
@@ -11,8 +16,8 @@ on:
         required: true
 
 jobs:
-  test-playmode:
-    name: Unity PlayMode Tests
+  test-editmode:
+    name: Unity EditMode Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -26,12 +31,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-PlayMode-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-EditMode-${{ inputs.unityVersion }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
-            Library-PlayMode-
+            Library-EditMode-${{ inputs.unityVersion }}-
+            Library-EditMode-
             Library-
 
-      - name: Run PlayMode tests
+      - name: Run EditMode tests
         uses: game-ci/unity-test-runner@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -39,13 +45,15 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: .
-          testMode: PlayMode
+          testMode: EditMode
+          unityVersion: ${{ inputs.unityVersion }}
+          artifactsPath: test-results/EditMode
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload PlayMode results
+      - name: Upload EditMode results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PlayMode-Test-Results
-          path: artifacts
+          name: EditMode-Test-Results
+          path: test-results/EditMode
           retention-days: 7
