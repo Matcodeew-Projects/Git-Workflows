@@ -1,0 +1,69 @@
+name: Publish to itch.io
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: "itch.io project in user/project format"
+        required: true
+        type: string
+
+      channel:
+        description: "itch.io channel (windows, linux, mac, etc.)"
+        required: false
+        type: string
+        default: "windows"
+
+      version:
+        description: "Version published to itch.io"
+        required: true
+        type: string
+
+      artifactName:
+        description: "Name of the GitHub Actions build artifact"
+        required: true
+        type: string
+
+    secrets:
+      ITCHIO_API_KEY:
+        description: "itch.io API key"
+        required: true
+
+jobs:
+  publish:
+    name: Publish to itch.io
+    runs-on: ubuntu-latest
+
+    steps:
+      # ------------------------------
+      # Download Build
+      # ------------------------------
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifactName }}
+          path: build
+
+      # ------------------------------
+      # Check Build
+      # ------------------------------
+
+      - name: Check build
+        shell: bash
+        run: |
+          echo "Build content:"
+          find build -maxdepth 2 -type f
+
+      # ------------------------------
+      # Publish to itch.io
+      # ------------------------------
+
+      - name: Upload build to itch.io
+        uses: robpc/itchio-upload-action@v1
+        with:
+          path: build
+          project: ${{ inputs.project }}
+          channel: ${{ inputs.channel }}
+          version: ${{ inputs.version }}
+          api-key: ${{ secrets.ITCHIO_API_KEY }}
