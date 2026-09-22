@@ -61,6 +61,21 @@ jobs:
           name: ${{ inputs.artifactName }}
           path: release-artifacts
 
+      - name: Package build
+        if: inputs.artifactName != ''
+        shell: bash
+        run: |
+          echo "Packaging build artifact..."
+
+          cd release-artifacts
+
+          zip -r "../${{ inputs.artifactName }}.zip" .
+
+          cd ..
+
+          echo "Created:"
+          ls -lh "${{ inputs.artifactName }}.zip"
+
       # ------------------------------
       # Tag
       # ------------------------------
@@ -84,6 +99,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NAME: ${{ inputs.releaseName }}
           NEW_TAG: ${{ inputs.nextTag }}
+          ARTIFACT_NAME: ${{ inputs.artifactName }}
         shell: bash
         run: |
           if [ -z "$RELEASE_NAME" ]; then
@@ -96,10 +112,10 @@ jobs:
             PRERELEASE=""
           fi
 
-          if [ -d "release-artifacts" ] && [ "$(ls -A release-artifacts)" ]; then
+          if [ -n "$ARTIFACT_NAME" ] && [ -f "${ARTIFACT_NAME}.zip" ]; then
 
             gh release create "$NEW_TAG" \
-              release-artifacts/* \
+              "${ARTIFACT_NAME}.zip" \
               --title "$RELEASE_NAME" \
               --notes-file release-notes/release-notes.md \
               $PRERELEASE
