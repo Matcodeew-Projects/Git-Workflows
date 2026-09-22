@@ -4,12 +4,16 @@ on:
   workflow_call:
     outputs:
       previousTag:
-        description: "Previous release tag"
+        description: "Previous Git tag"
         value: ${{ jobs.version.outputs.previousTag }}
 
       nextTag:
-        description: "Next release tag"
+        description: "Next semantic version tag"
         value: ${{ jobs.version.outputs.nextTag }}
+
+      bumpType:
+        description: "Version bump type: major, minor or patch"
+        value: ${{ jobs.version.outputs.bumpType }}
 
 jobs:
   version:
@@ -19,6 +23,7 @@ jobs:
     outputs:
       previousTag: ${{ steps.version.outputs.previousTag }}
       nextTag: ${{ steps.version.outputs.nextTag }}
+      bumpType: ${{ steps.version.outputs.bumpType }}
 
     steps:
       - name: Checkout repository
@@ -30,24 +35,95 @@ jobs:
         id: version
         shell: bash
         run: |
-          git fetch --tags
+          # --------------------------------
+          # Find previous tag
+          # --------------------------------
 
-          LAST_TAG=$(git tag --list "v*" --sort=-version:refname | head -n 1)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 
-          if [ -z "$LAST_TAG" ]; then
-            LAST_TAG="v0.0.0"
-          fi
+          echo "Previous tag: $PREVIOUS_TAG"
 
-          VERSION=${LAST_TAG#v}
+          # Remove the "v"
+          VERSION="${PREVIOUS_TAG#v}"
 
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
-          PATCH=$((PATCH + 1))
+          # --------------------------------
+          # Get commits since previous tag
+          # --------------------------------
+
+          if [ "$PREVIOUS_TAG" = "v0.0.0" ]; then
+            COMMITS=$(git log --format="%B")
+          else
+            COMMITS=$(git log "${PREVIOUS_TAG}..HEAD" --format="%B")
+          fi
+
+          echo "Commits:"
+          echo "$COMMITS"
+
+          # --------------------------------
+          # Determine bump type
+          # --------------------------------
+
+          BUMP_TYPE="patch"
+
+          # BREAKING CHANGE has priority
+          if echo "$COMMITS" | grep -Eiq \
+            'BREAKING CHANGE|^[a-zA-Z]+(\([^)]+\))?!:'; then
+
+            BUMP_TYPE="major"
+
+          elif echo "$COMMITS" | grep -Eiq \
+            '^feat(\([^)]+\))?:'; then
+
+            BUMP_TYPE="minor"
+
+          fi
+
+          echo "Bump type: $BUMP_TYPE"
+
+          # --------------------------------
+          # Compute next version
+          # --------------------------------
+
+          case "$BUMP_TYPE" in
+
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+
+          esac
 
           NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
 
-          echo "Previous tag: $LAST_TAG"
           echo "Next tag: $NEXT_TAG"
 
-          echo "previousTag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+          # --------------------------------
+          # Outputs
+          # --------------------------------
+
+          echo "previousTag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
           echo "nextTag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+          echo "bumpType=$BUMP_TYPE" >> "$GITHUB_OUTPUT"
+
+      - name: Version summary
+        shell: bash
+        run: |
+          echo "### Version" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | Version |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Previous | \`${{ steps.version.outputs.previousTag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Next | \`${{ steps.version.outputs.nextTag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Bump | \`${{ steps.version.outputs.bumpType }}\` |" >> "$GITHUB_STEP_SUMMARY"
